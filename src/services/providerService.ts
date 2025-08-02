@@ -56,20 +56,31 @@ export const providerService = {
     if (data && typeof data === 'object') {
       const transformed = { ...data };
       
-      // Procesăm coordonatele din format JSON (din funcțiile RPC)
+      // Format 1: Coordonate din funcțiile RPC (JSON format)
       if (data.coordinates && typeof data.coordinates === 'object') {
         try {
           const { lat, lng } = data.coordinates;
           if (typeof lat === 'number' && typeof lng === 'number') {
             transformed.coordinates = { lat, lng };
-            console.log("Coordonate JSON pentru", data.salon_name || 'provider', ":", { lat, lng });
           }
         } catch (error) {
-          console.warn("Eroare la procesarea coordonatelor JSON pentru", data.salon_name || 'provider', ":", error);
+          console.warn("Eroare la procesarea coordonatelor JSON:", error);
         }
       }
-      
-
+      // Format 2: Coordonate din PostGIS "POINT(lng lat)" 
+      else if (data.location && typeof data.location === 'string' && data.location.startsWith('POINT(')) {
+        try {
+          const match = data.location.match(/POINT\(([^)]+)\)/);
+          if (match) {
+            const [lng, lat] = match[1].split(' ').map(Number);
+            if (!isNaN(lat) && !isNaN(lng)) {
+              transformed.coordinates = { lat, lng };
+            }
+          }
+        } catch (error) {
+          console.warn("Eroare la procesarea coordonatelor PostGIS:", error);
+        }
+      }
       
       return transformed;
     }
