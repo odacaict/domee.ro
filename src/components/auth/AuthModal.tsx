@@ -50,7 +50,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onNavigat
         if (isCompany) {
           setTimeout(() => {
             handleClose();
-            onNavigate('provider-signup');
+            onNavigate('provider_signup');
           }, 3000);
         }
       }
