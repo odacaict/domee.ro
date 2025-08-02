@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MapPin, SlidersHorizontal } from 'lucide-react';
+import { Search, MapPin, SlidersHorizontal, Map, CheckCircle } from 'lucide-react';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { SearchSuggestions } from './SearchSuggestions';
@@ -25,6 +25,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [locationPermissionRequested, setLocationPermissionRequested] = useState(false);
+  const [isPlusCodeValid, setIsPlusCodeValid] = useState(false);
+  const [plusCodeLocation, setPlusCodeLocation] = useState<string>('');
   const debouncedQuery = useDebounce(query, SEARCH_DEBOUNCE_MS);
   const searchRef = useRef<HTMLDivElement>(null);
   const { user } = useApp();
@@ -35,11 +37,20 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         try {
           // Verificăm dacă query-ul este un Plus Code
           const isPlusCode = plusCodeHelpers.isValidPlusCode(debouncedQuery);
+          setIsPlusCodeValid(isPlusCode);
           
           if (isPlusCode) {
-            // Pentru Plus Codes, nu avem nevoie de sugestii suplimentare
+            // Pentru Plus Codes, încercăm să obținem locația
+            try {
+              const location = await plusCodeHelpers.decodeToLocation(debouncedQuery);
+              setPlusCodeLocation(location);
+            } catch (error) {
+              console.warn('Nu s-a putut decoda Plus Code-ul:', error);
+              setPlusCodeLocation('Locație necunoscută');
+            }
             setSuggestions([]);
           } else {
+            setPlusCodeLocation('');
             const results = await searchService.getSearchSuggestions(debouncedQuery);
             setSuggestions(results);
           }
@@ -48,6 +59,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         }
       } else {
         setSuggestions([]);
+        setIsPlusCodeValid(false);
+        setPlusCodeLocation('');
       }
     };
 
@@ -85,16 +98,23 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       // Verificăm dacă este un Plus Code
       const isPlusCode = plusCodeHelpers.isValidPlusCode(searchQuery);
       if (isPlusCode) {
-        console.log('Căutare Plus Code detectată:', searchQuery);
+        console.log('Căutare Plus Code detectată:', searchQuery, 'Locație:', plusCodeLocation);
+        // Pentru Plus Code, adăugăm informații suplimentare în istoric
+        if (user) {
+          searchService.saveSearchHistory(user.id, searchQuery, { 
+            type: 'plus_code', 
+            location: plusCodeLocation 
+          }, 0);
+        }
+      } else {
+        // Pentru căutări normale
+        if (user) {
+          searchService.saveSearchHistory(user.id, searchQuery, { type: 'text_search' }, 0);
+        }
       }
       
       onSearch(searchQuery);
       setShowSuggestions(false);
-      
-      // Save to search history
-      if (user) {
-        searchService.saveSearchHistory(user.id, searchQuery, {}, 0);
-      }
     }
   };
 
@@ -157,27 +177,51 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               }}
               onFocus={() => setShowSuggestions(true)}
               onKeyPress={handleKeyPress}
-              icon={<Search size={18} className="text-slate-400" />}
-              className={`text-base h-12 ${
-                plusCodeHelpers.isValidPlusCode(query) 
-                  ? 'border-green-500 bg-green-50' 
+              icon={isPlusCodeValid ? (
+                <Map size={18} className="text-emerald-600" />
+              ) : (
+                <Search size={18} className="text-slate-400" />
+              )}
+              className={`text-base h-12 transition-all duration-200 ${
+                isPlusCodeValid
+                  ? 'border-emerald-500 bg-emerald-50 shadow-emerald-100 shadow-md' 
                   : ''
               }`}
             />
-            {plusCodeHelpers.isValidPlusCode(query) && (
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                  Plus Code
+            {isPlusCodeValid && (
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                <CheckCircle size={16} className="text-emerald-600" />
+                <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-medium">
+                  Plus Code Valid
                 </span>
               </div>
             )}
           </div>
-          <SearchSuggestions
-            suggestions={suggestions}
-            recentSearches={recentSearches}
-            onSelect={handleSuggestionSelect}
-            visible={showSuggestions}
-          />
+          
+          {/* Plus Code Location Display */}
+          {isPlusCodeValid && plusCodeLocation && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-emerald-50 border border-emerald-200 rounded-lg p-3 shadow-md z-10">
+              <div className="flex items-center gap-2 text-emerald-800">
+                <MapPin size={14} className="text-emerald-600" />
+                <span className="text-sm font-medium">Locația detectată:</span>
+              </div>
+              <p className="text-emerald-700 text-sm mt-1 font-medium">{plusCodeLocation}</p>
+              <div className="flex items-center gap-1 mt-2">
+                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                <span className="text-xs text-emerald-600">Gata pentru căutare în această zonă</span>
+              </div>
+            </div>
+          )}
+          
+                     {/* Regular Suggestions */}
+           {!isPlusCodeValid && (
+             <SearchSuggestions
+               suggestions={suggestions}
+               recentSearches={recentSearches}
+               onSelect={handleSuggestionSelect}
+               visible={showSuggestions}
+             />
+           )}
         </div>
         <Button
           variant="outline"
@@ -198,7 +242,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           {locationPermissionRequested ? 'Actualizează locația' : 'Folosește locația mea'}
         </button>
         
-        <div className="flex gap-2 text-xs">
+        <div className="flex gap-2 text-xs items-center">
+          {isPlusCodeValid && (
+            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full flex items-center gap-1">
+              <Map size={12} />
+              Plus Code Valid
+            </span>
+          )}
           <span className="px-2 py-1 bg-slate-100 rounded-full text-slate-600">
             Disponibil acum
           </span>
