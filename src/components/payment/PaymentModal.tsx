@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
-import { X, CreditCard, Bitcoin, Shield, AlertCircle } from 'lucide-react';
+import { X, Bitcoin, Shield, AlertCircle } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { StripePayment } from './StripePayment';
 import { CryptoPayment } from './CryptoPayment';
 import { Booking, Provider } from '../../types';
 import { formatPrice } from '../../lib/utils';
-import { cn } from '../../lib/utils';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -15,8 +13,6 @@ interface PaymentModalProps {
   onSuccess: () => void;
 }
 
-type PaymentMethod = 'card' | 'crypto';
-
 export const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
   onClose,
@@ -24,7 +20,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   provider,
   onSuccess,
 }) => {
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,17 +39,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const platformFee = Math.round(booking.total_price * 0.05 * 100) / 100;
   const total = booking.total_price + platformFee;
 
-  const canPayWithCard = provider.payment_methods?.fiat;
   const canPayWithCrypto = provider.payment_methods?.crypto && provider.payment_methods?.crypto_wallets?.length > 0;
 
-  // If provider doesn't accept any payment method, show error
-  if (!canPayWithCard && !canPayWithCrypto) {
+  // If provider doesn't accept crypto payment, show error
+  if (!canPayWithCrypto) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-          <h2 className="text-xl font-bold text-slate-800 mb-4">Eroare Plată</h2>
+          <h2 className="text-xl font-bold text-slate-800 mb-4">Plata cu Criptomonedă Indisponibilă</h2>
           <p className="text-slate-600 mb-6">
-            Acest furnizor nu a configurat încă metodele de plată. 
+            Acest furnizor nu acceptă plăți cu criptomonedă. 
             Vă rugăm să contactați direct salonul pentru rezervare.
           </p>
           <Button onClick={onClose} className="w-full">Închide</Button>
@@ -101,53 +95,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           </div>
 
-          {/* Payment Method Selection */}
+          {/* Payment Method - Crypto Only */}
           <div>
-            <h3 className="font-semibold text-slate-800 mb-3">Alege metoda de plată</h3>
-            <div className="space-y-3">
-              {canPayWithCard && (
-                <button
-                  onClick={() => {
-                    setPaymentMethod('card');
-                    setError(null);
-                  }}
-                  disabled={isProcessing}
-                  className={cn(
-                    "w-full p-4 rounded-xl border-2 flex items-center gap-3 transition-all",
-                    paymentMethod === 'card'
-                      ? "border-amber-600 bg-amber-50"
-                      : "border-slate-200 hover:border-slate-300"
-                  )}
-                >
-                  <CreditCard size={24} className={paymentMethod === 'card' ? 'text-amber-600' : 'text-slate-400'} />
-                  <div className="flex-1 text-left">
-                    <p className="font-medium text-slate-800">Card Bancar</p>
-                    <p className="text-sm text-slate-600">Visa, Mastercard, etc.</p>
-                  </div>
-                </button>
-              )}
-
-              {canPayWithCrypto && (
-                <button
-                  onClick={() => {
-                    setPaymentMethod('crypto');
-                    setError(null);
-                  }}
-                  disabled={isProcessing}
-                  className={cn(
-                    "w-full p-4 rounded-xl border-2 flex items-center gap-3 transition-all",
-                    paymentMethod === 'crypto'
-                      ? "border-amber-600 bg-amber-50"
-                      : "border-slate-200 hover:border-slate-300"
-                  )}
-                >
-                  <Bitcoin size={24} className={paymentMethod === 'crypto' ? 'text-amber-600' : 'text-slate-400'} />
-                  <div className="flex-1 text-left">
-                    <p className="font-medium text-slate-800">Criptomonedă</p>
-                    <p className="text-sm text-slate-600">Bitcoin, Ethereum, etc.</p>
-                  </div>
-                </button>
-              )}
+            <h3 className="font-semibold text-slate-800 mb-3">Plată cu Criptomonedă</h3>
+            <div className="w-full p-4 rounded-xl border-2 border-amber-600 bg-amber-50 flex items-center gap-3">
+              <Bitcoin size={24} className="text-amber-600" />
+              <div className="flex-1 text-left">
+                <p className="font-medium text-slate-800">Criptomonedă</p>
+                <p className="text-sm text-slate-600">Bitcoin, Ethereum, etc.</p>
+              </div>
             </div>
           </div>
 
@@ -159,28 +115,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           )}
 
-          {/* Payment Form */}
+          {/* Crypto Payment Form */}
           <div className="border-t pt-6">
-            {paymentMethod === 'card' ? (
-              <StripePayment
-                bookingId={booking.id}
-                amount={total}
-                onSuccess={handlePaymentSuccess}
-                onError={handlePaymentError}
-                isProcessing={isProcessing}
-                setIsProcessing={setIsProcessing}
-              />
-            ) : (
-              <CryptoPayment
-                bookingId={booking.id}
-                amount={total}
-                provider={provider}
-                onSuccess={handlePaymentSuccess}
-                onError={handlePaymentError}
-                isProcessing={isProcessing}
-                setIsProcessing={setIsProcessing}
-              />
-            )}
+            <CryptoPayment
+              bookingId={booking.id}
+              amount={total}
+              provider={provider}
+              onSuccess={handlePaymentSuccess}
+              onError={handlePaymentError}
+              isProcessing={isProcessing}
+              setIsProcessing={setIsProcessing}
+            />
           </div>
 
           {/* Security Notice */}
