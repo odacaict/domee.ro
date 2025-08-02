@@ -124,15 +124,44 @@ export const MapView: React.FC<MapViewProps> = ({
 
     // Add provider markers - PINURI ROȘII
     providers.forEach((provider) => {
-      console.log('Provider pentru hartă:', provider.salon_name, 'Coordonate:', provider.coordinates);
+      console.log('Provider pentru hartă:', provider.salon_name, 'Coordonate:', provider.coordinates, 'Location:', provider.location);
       
-      if (!provider.coordinates) {
-        console.warn('Provider fără coordonate:', provider.salon_name);
+      // Verifică și procesează coordonatele din diverse formate
+      let coordinates = null;
+      
+      // Format 1: coordinates obiect direct (din RPC)
+      if (provider.coordinates && typeof provider.coordinates === 'object' && 
+          typeof provider.coordinates.lat === 'number' && typeof provider.coordinates.lng === 'number') {
+        coordinates = provider.coordinates;
+      }
+      // Format 2: location GEOGRAPHY din baza de date (în cazul în care Supabase îl returnează ca string sau obiect)
+      else if (provider.location) {
+        try {
+          // Încearcă să parseze location-ul dacă este string
+          if (typeof provider.location === 'string') {
+            const parsed = JSON.parse(provider.location);
+            if (parsed.coordinates && Array.isArray(parsed.coordinates) && parsed.coordinates.length === 2) {
+              coordinates = { lat: parsed.coordinates[1], lng: parsed.coordinates[0] }; // GeoJSON: [lng, lat]
+            }
+          }
+          // Dacă location este deja obiect
+          else if (typeof provider.location === 'object' && provider.location.coordinates) {
+            if (Array.isArray(provider.location.coordinates) && provider.location.coordinates.length === 2) {
+              coordinates = { lat: provider.location.coordinates[1], lng: provider.location.coordinates[0] }; // GeoJSON: [lng, lat]
+            }
+          }
+        } catch (error) {
+          console.warn('Eroare la parsarea location pentru', provider.salon_name, ':', error);
+        }
+      }
+      
+      if (!coordinates) {
+        console.warn('Provider fără coordonate valide:', provider.salon_name, 'coordinates:', provider.coordinates, 'location:', provider.location);
         return;
       }
 
       const marker = new window.google.maps.Marker({
-        position: { lat: provider.coordinates.lat, lng: provider.coordinates.lng },
+        position: { lat: coordinates.lat, lng: coordinates.lng },
         map: mapInstanceRef.current,
         title: provider.salon_name,
         icon: {

@@ -7,6 +7,7 @@ import { Provider, DaySchedule, BankAccount } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { ROMANIA_CITIES, FACILITIES_OPTIONS, LANGUAGES } from '../../utils/constants';
 import { plusCodeHelpers } from '../../utils/plusCodeHelpers';
+import { validateCoordinates } from '../../utils/validation';
 
 interface ProfileEditorProps {
   providerId: string;
@@ -53,6 +54,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
     bank_accounts: [], crypto_wallets: [],
   });
   const [logoUrl, setLogoUrl] = useState<string>('');
+  const [coordinatesError, setCoordinatesError] = useState<string>('');
   
   const [newBankAccount, setNewBankAccount] = useState<BankAccount>({ bank_name: '', iban: '', swift: '' });
   const [newCryptoWallet, setNewCryptoWallet] = useState('');
@@ -68,27 +70,43 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
       
       console.log("Raw provider data:", data); // Debug
       
-      // NOU: Procesăm coordonatele corect
+      // Procesează coordonatele din diverse formate
       let coordinatesString = '';
       if (data.location) {
         try {
-          // Coordonatele din Supabase sunt în format PostGIS
-          // Trebuie să le parsăm corect
           if (typeof data.location === 'string' && data.location.startsWith('POINT(')) {
-            // Format: POINT(lng lat)
+            // Format PostGIS: POINT(lng lat)
             const match = data.location.match(/POINT\(([^)]+)\)/);
             if (match) {
               const [lng, lat] = match[1].split(' ').map(Number);
+              if (!isNaN(lat) && !isNaN(lng)) {
+                coordinatesString = `${lat}, ${lng}`;
+              }
+            }
+          } else if (typeof data.location === 'object' && data.location.coordinates) {
+            // Format GeoJSON: { coordinates: [lng, lat] }
+            const [lng, lat] = data.location.coordinates;
+            if (!isNaN(lat) && !isNaN(lng)) {
               coordinatesString = `${lat}, ${lng}`;
             }
-          } else if (data.location.coordinates) {
-            // Format JSON: { coordinates: [lng, lat] }
-            const [lng, lat] = data.location.coordinates;
-            coordinatesString = `${lat}, ${lng}`;
           }
         } catch (error) {
           console.warn("Eroare la procesarea coordonatelor:", error);
         }
+      }
+      
+      // Procesează payment_methods cu verificări defensive
+      let bankAccounts = [];
+      let cryptoWallets = [];
+      if (data.payment_methods && typeof data.payment_methods === 'object') {
+        bankAccounts = Array.isArray(data.payment_methods.bank_accounts) ? data.payment_methods.bank_accounts : [];
+        cryptoWallets = Array.isArray(data.payment_methods.crypto_wallets) ? data.payment_methods.crypto_wallets : [];
+      }
+      
+      // Procesează working_hours cu fallback la default
+      let workingHours = getDefaultWorkingHours();
+      if (data.working_hours && typeof data.working_hours === 'object') {
+        workingHours = { ...getDefaultWorkingHours(), ...data.working_hours };
       }
       
       setFormData({
@@ -101,24 +119,29 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
         phone: data.phone || '',
         email: data.email || '',
         website: data.website || '',
-        working_hours: data.working_hours || getDefaultWorkingHours(),
-        facilities: data.facilities || [],
-        languages: data.languages || ['ro'],
-        social_media: data.social_media || {},
-        policies: data.policies || {},
-        team_members: data.team_members || [],
+        working_hours: workingHours,
+        facilities: Array.isArray(data.facilities) ? data.facilities : [],
+        languages: Array.isArray(data.languages) ? data.languages : ['ro'],
+        social_media: data.social_media && typeof data.social_media === 'object' ? data.social_media : {},
+        policies: data.policies && typeof data.policies === 'object' ? data.policies : {},
+        team_members: Array.isArray(data.team_members) ? data.team_members : [],
         company_name: data.company_name || '',
         fiscal_code: data.fiscal_code || '',
         company_type: data.company_type || '',
-        bank_accounts: data.payment_methods?.bank_accounts || [],
-        crypto_wallets: data.payment_methods?.crypto_wallets || [],
+        bank_accounts: bankAccounts,
+        crypto_wallets: cryptoWallets,
       });
+      
+      // Setează logo_url cu verificare
       setLogoUrl(data.logo_url || '');
       
       console.log("Processed form data:", {
         salon_name: data.salon_name,
         coordinates: coordinatesString,
-        logo_url: data.logo_url
+        bank_accounts: bankAccounts,
+        crypto_wallets: cryptoWallets,
+        logo_url: data.logo_url,
+        working_hours: workingHours
       });
     } catch (error) {
       console.error('Failed to fetch provider data:', error);
@@ -217,6 +240,21 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
     setFormData(prev => ({ ...prev, team_members: prev.team_members?.filter((_, i) => i !== index) }));
   };
 
+  const handleCoordinatesChange = (value: string) => {
+    setFormData({ ...formData, coordinates: value });
+    
+    // Validează coordonatele dacă câmpul nu este gol
+    if (value.trim()) {
+      if (!validateCoordinates(value)) {
+        setCoordinatesError('Format invalid. Folosește formatul: latitudine, longitudine (ex: 44.4268, 26.1025)');
+      } else {
+        setCoordinatesError('');
+      }
+    } else {
+      setCoordinatesError('');
+    }
+  };
+
   if (loading) {
     return <div className="animate-pulse space-y-6"><div className="h-32 bg-slate-200 rounded-xl"></div><div className="h-32 bg-slate-200 rounded-xl"></div></div>;
   }
@@ -302,6 +340,28 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
             </select>
           </div>
           <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Coordonate GPS (opțional)</label>
+            <Input 
+              value={formData.coordinates || ''} 
+              onChange={(e) => handleCoordinatesChange(e.target.value)} 
+              placeholder="ex: 44.4268, 26.1025" 
+              className="w-full"
+              error={coordinatesError}
+            />
+            <div className="mt-2 space-y-2 text-xs text-slate-600">
+              <p className="font-medium">💡 Cum să obții coordonatele:</p>
+              <ul className="space-y-1 ml-4">
+                <li>• Mergi pe <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google Maps</a></li>
+                <li>• Caută adresa salonului tău</li>
+                <li>• Click dreapta pe locația exactă și alege "Ce e aici?"</li>
+                <li>• Copiază coordonatele afișate (ex: 44.4268, 26.1025)</li>
+              </ul>
+              <p className="text-amber-600 font-medium">
+                ⚠️ Formatul corect: latitudine, longitudine (separate prin virgulă și spațiu)
+              </p>
+            </div>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Plus Code (opțional)</label>
             <div className="flex gap-2">
               <Input 
@@ -335,7 +395,119 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2"><Clock size={20} />Program de Lucru</h3>
-         {/* ... implementation for working hours editor ... */}
+        
+        <div className="space-y-4">
+          {Object.entries(formData.working_hours).map(([day, schedule]) => {
+            const dayLabels: Record<string, string> = {
+              monday: 'Luni',
+              tuesday: 'Marți', 
+              wednesday: 'Miercuri',
+              thursday: 'Joi',
+              friday: 'Vineri',
+              saturday: 'Sâmbătă',
+              sunday: 'Duminică'
+            };
+
+            return (
+              <div key={day} className="border border-slate-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-slate-800">{dayLabels[day]}</h4>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!schedule.closed}
+                      onChange={(e) => handleWorkingHoursChange(day, 'closed', !e.target.checked)}
+                      className="rounded border-slate-300"
+                    />
+                    <span className="text-sm text-slate-600">Deschis</span>
+                  </label>
+                </div>
+
+                {!schedule.closed && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">Ora deschidere</label>
+                        <input
+                          type="time"
+                          value={schedule.open || '09:00'}
+                          onChange={(e) => handleWorkingHoursChange(day, 'open', e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">Ora închidere</label>
+                        <input
+                          type="time"
+                          value={schedule.close || '18:00'}
+                          onChange={(e) => handleWorkingHoursChange(day, 'close', e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Pauze */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-medium text-slate-700">Pauze</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newBreaks = [...(schedule.breaks || []), { start: '12:00', end: '13:00' }];
+                            handleWorkingHoursChange(day, 'breaks', newBreaks);
+                          }}
+                          className="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded text-slate-600"
+                        >
+                          + Adaugă pauză
+                        </button>
+                      </div>
+                      
+                      {schedule.breaks && schedule.breaks.length > 0 && (
+                        <div className="space-y-2">
+                          {schedule.breaks.map((breakTime, index) => (
+                            <div key={index} className="flex items-center gap-2 bg-slate-50 p-2 rounded">
+                              <input
+                                type="time"
+                                value={breakTime.start}
+                                onChange={(e) => {
+                                  const newBreaks = [...schedule.breaks];
+                                  newBreaks[index] = { ...newBreaks[index], start: e.target.value };
+                                  handleWorkingHoursChange(day, 'breaks', newBreaks);
+                                }}
+                                className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm"
+                              />
+                              <span className="text-slate-500 text-sm">-</span>
+                              <input
+                                type="time"
+                                value={breakTime.end}
+                                onChange={(e) => {
+                                  const newBreaks = [...schedule.breaks];
+                                  newBreaks[index] = { ...newBreaks[index], end: e.target.value };
+                                  handleWorkingHoursChange(day, 'breaks', newBreaks);
+                                }}
+                                className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newBreaks = schedule.breaks.filter((_, i) => i !== index);
+                                  handleWorkingHoursChange(day, 'breaks', newBreaks);
+                                }}
+                                className="p-1 text-red-600 hover:bg-red-100 rounded"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">

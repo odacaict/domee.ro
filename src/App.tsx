@@ -72,7 +72,6 @@ const AppContent: React.FC = () => {
             <div className="flex flex-col gap-3">
               <button onClick={() => setCurrentView('provider_signup')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-lg transition-colors">Completează profilul</button>
               <button onClick={() => setCurrentView('main')} className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-6 py-3 rounded-lg transition-colors">Înapoi la pagina principală</button>
-              <button onClick={() => setCurrentView('main')} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-6 py-3 rounded-lg transition-colors">Înapoi la pagina principală</button>
             </div>
           </div>
         </div>

@@ -62,19 +62,43 @@ export const GalleryManager: React.FC<GalleryManagerProps> = ({ providerId }) =>
   const saveGalleryData = async () => {
     setSaving(true);
     try {
+      // Agregăm toate imaginile din toate categoriile pentru providers.images
+      const allImages = categories.reduce((acc, category) => {
+        return [...acc, ...category.images];
+      }, [] as string[]);
+
       const { error } = await supabase
         .from('providers')
         .update({
           gallery: categories,
+          images: allImages, // Actualizează și array-ul principal de imagini
           video_url: videoUrl,
         })
         .eq('id', providerId);
 
       if (error) throw error;
-      alert('Galeria a fost salvată cu succes!');
+      
+      // Înlocuim alert cu o notificare mai elegantă
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 z-50 bg-emerald-500 text-white p-4 rounded-lg shadow-lg flex items-center gap-2';
+      notification.innerHTML = '<span>✓</span><span>Galeria a fost salvată cu succes!</span>';
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        document.body.removeChild(notification);
+      }, 3000);
     } catch (error) {
       console.error('Failed to save gallery:', error);
-      alert('Eroare la salvarea galeriei');
+      
+      // Notificare de eroare
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 z-50 bg-red-500 text-white p-4 rounded-lg shadow-lg flex items-center gap-2';
+      notification.innerHTML = '<span>✕</span><span>Eroare la salvarea galeriei</span>';
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        document.body.removeChild(notification);
+      }, 3000);
     } finally {
       setSaving(false);
     }
@@ -84,6 +108,29 @@ export const GalleryManager: React.FC<GalleryManagerProps> = ({ providerId }) =>
     setCategories(prev => prev.map(cat =>
       cat.id === categoryId ? { ...cat, images } : cat
     ));
+    
+    // Auto-save după fiecare modificare pentru sincronizare immediatez
+    setTimeout(async () => {
+      const updatedCategories = categories.map(cat =>
+        cat.id === categoryId ? { ...cat, images } : cat
+      );
+      
+      const allImages = updatedCategories.reduce((acc, category) => {
+        return [...acc, ...category.images];
+      }, [] as string[]);
+
+      try {
+        await supabase
+          .from('providers')
+          .update({
+            gallery: updatedCategories,
+            images: allImages,
+          })
+          .eq('id', providerId);
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+      }
+    }, 500); // Debounce pentru a evita prea multe requests
   };
 
   const removeImage = async (categoryId: string, imageUrl: string) => {
@@ -94,14 +141,39 @@ export const GalleryManager: React.FC<GalleryManagerProps> = ({ providerId }) =>
       await uploadService.deleteImage(imageUrl, 'gallery');
       
       // Update state
-      setCategories(prev => prev.map(cat =>
+      const updatedCategories = categories.map(cat =>
         cat.id === categoryId 
           ? { ...cat, images: cat.images.filter(img => img !== imageUrl) }
           : cat
-      ));
+      );
+      
+      setCategories(updatedCategories);
+      
+      // Update database immediately pentru consistență
+      const allImages = updatedCategories.reduce((acc, category) => {
+        return [...acc, ...category.images];
+      }, [] as string[]);
+
+      await supabase
+        .from('providers')
+        .update({
+          gallery: updatedCategories,
+          images: allImages,
+        })
+        .eq('id', providerId);
+        
     } catch (error) {
       console.error('Failed to delete image:', error);
-      alert('Eroare la ștergerea imaginii');
+      
+      // Notificare de eroare
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 z-50 bg-red-500 text-white p-4 rounded-lg shadow-lg flex items-center gap-2';
+      notification.innerHTML = '<span>✕</span><span>Eroare la ștergerea imaginii</span>';
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        document.body.removeChild(notification);
+      }, 3000);
     }
   };
 
@@ -113,10 +185,28 @@ export const GalleryManager: React.FC<GalleryManagerProps> = ({ providerId }) =>
         .eq('id', providerId);
 
       if (error) throw error;
-      alert('Imaginea principală a fost setată!');
+      
+      // Notificare de succes
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 z-50 bg-emerald-500 text-white p-4 rounded-lg shadow-lg flex items-center gap-2';
+      notification.innerHTML = '<span>⭐</span><span>Imaginea principală a fost setată!</span>';
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        document.body.removeChild(notification);
+      }, 3000);
     } catch (error) {
       console.error('Failed to set featured image:', error);
-      alert('Eroare la setarea imaginii principale');
+      
+      // Notificare de eroare
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 z-50 bg-red-500 text-white p-4 rounded-lg shadow-lg flex items-center gap-2';
+      notification.innerHTML = '<span>✕</span><span>Eroare la setarea imaginii principale</span>';
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        document.body.removeChild(notification);
+      }, 3000);
     }
   };
 

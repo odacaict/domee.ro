@@ -25,6 +25,7 @@ export const ReviewDashboard: React.FC<ReviewDashboardProps> = ({ providerId }) 
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [replyErrors, setReplyErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchReviews();
@@ -121,30 +122,110 @@ export const ReviewDashboard: React.FC<ReviewDashboardProps> = ({ providerId }) 
     }
   };
 
+  const validateReply = (text: string): string | null => {
+    const trimmedText = text.trim();
+    
+    if (!trimmedText) {
+      return 'Răspunsul nu poate fi gol';
+    }
+    
+    if (trimmedText.length < 10) {
+      return 'Răspunsul trebuie să aibă cel puțin 10 caractere';
+    }
+    
+    if (trimmedText.length > 500) {
+      return 'Răspunsul nu poate depăși 500 de caractere';
+    }
+    
+    // Verifică pentru limbaj nepotrivit
+    const inappropriateWords = ['nasol', 'prost', 'idiot', 'stupid', 'imbecil'];
+    const lowerText = trimmedText.toLowerCase();
+    for (const word of inappropriateWords) {
+      if (lowerText.includes(word)) {
+        return 'Răspunsul conține limbaj nepotrivit. Vă rugăm să fiți respectuos';
+      }
+    }
+    
+    // Verifică pentru spam (text repetitiv)
+    const words = trimmedText.split(' ');
+    const uniqueWords = new Set(words);
+    if (words.length > 5 && uniqueWords.size / words.length < 0.5) {
+      return 'Răspunsul pare să conțină text repetitiv';
+    }
+    
+    return null;
+  };
+
+  const handleReplyTextChange = (reviewId: string, text: string) => {
+    setReplyText(text);
+    
+    // Validare în timp real
+    const error = validateReply(text);
+    setReplyErrors(prev => ({
+      ...prev,
+      [reviewId]: error || ''
+    }));
+  };
+
   const handleReply = async (reviewId: string) => {
-    if (!replyText.trim()) return;
+    const trimmedText = replyText.trim();
+    
+    // Validare finală
+    const validationError = validateReply(trimmedText);
+    if (validationError) {
+      setReplyErrors(prev => ({
+        ...prev,
+        [reviewId]: validationError
+      }));
+      return;
+    }
 
     setSubmitting(true);
     try {
+      // Verifică dacă review-ul nu are deja răspuns
+      const review = reviews.find(r => r.id === reviewId);
+      if (review?.response) {
+        setReplyErrors(prev => ({
+          ...prev,
+          [reviewId]: 'Această recenzie are deja un răspuns'
+        }));
+        return;
+      }
+
       const { error } = await supabase
         .from('reviews')
-        .update({ response: replyText.trim() })
+        .update({ 
+          response: trimmedText,
+          responded_at: new Date().toISOString()
+        })
         .eq('id', reviewId);
 
       if (error) throw error;
 
       // Update local state
       setReviews(prev => prev.map(r => 
-        r.id === reviewId ? { ...r, response: replyText.trim() } : r
+        r.id === reviewId ? { 
+          ...r, 
+          response: trimmedText,
+          responded_at: new Date().toISOString()
+        } : r
       ));
       setReplyingTo(null);
       setReplyText('');
+      setReplyErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[reviewId];
+        return newErrors;
+      });
       
       // Refresh stats
       fetchStats();
     } catch (error) {
       console.error('Failed to submit reply:', error);
-      alert('Eroare la trimiterea răspunsului');
+      setReplyErrors(prev => ({
+        ...prev,
+        [reviewId]: 'Eroare la trimiterea răspunsului. Vă rugăm încercați din nou.'
+      }));
     } finally {
       setSubmitting(false);
     }
@@ -331,32 +412,69 @@ export const ReviewDashboard: React.FC<ReviewDashboardProps> = ({ providerId }) 
 
                     {/* Response */}
                     {review.response ? (
-                      <div className="bg-slate-50 rounded-lg p-4 mt-3">
-                        <p className="text-sm font-medium text-slate-700 mb-1">
-                          Răspunsul tău:
-                        </p>
-                        <p className="text-sm text-slate-600">{review.response}</p>
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mt-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-medium text-emerald-800">
+                            ✓ Răspunsul tău:
+                          </p>
+                          {review.responded_at && (
+                            <span className="text-xs text-emerald-600">
+                              {formatDate(review.responded_at)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-emerald-700">{review.response}</p>
                       </div>
                     ) : (
                       <>
                         {replyingTo === review.id ? (
                           <div className="mt-3">
-                            <textarea
-                              value={replyText}
-                              onChange={(e) => setReplyText(e.target.value)}
-                              placeholder="Scrie un răspuns..."
-                              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-20"
-                              rows={3}
-                              autoFocus
-                            />
-                            <div className="flex gap-2 mt-2">
+                            <div className="relative">
+                              <textarea
+                                value={replyText}
+                                onChange={(e) => handleReplyTextChange(review.id, e.target.value)}
+                                placeholder="Scrie un răspuns profesional și respectuos..."
+                                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-opacity-20 ${
+                                  replyErrors[review.id]
+                                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                                    : 'border-slate-300 focus:border-amber-500 focus:ring-amber-500'
+                                }`}
+                                rows={3}
+                                autoFocus
+                                maxLength={500}
+                              />
+                              <div className="absolute bottom-2 right-2 text-xs text-slate-400">
+                                {replyText.length}/500
+                              </div>
+                            </div>
+                            
+                            {replyErrors[review.id] && (
+                              <p className="text-red-600 text-sm mt-1">
+                                {replyErrors[review.id]}
+                              </p>
+                            )}
+                            
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+                              <p className="text-blue-800 text-sm font-medium mb-1">
+                                💡 Sfaturi pentru un răspuns eficient:
+                              </p>
+                              <ul className="text-blue-700 text-xs space-y-1">
+                                <li>• Mulțumește clientului pentru feedback</li>
+                                <li>• Adresează problemele specifice menționate</li>
+                                <li>• Oferă soluții sau explicații constructive</li>
+                                <li>• Menține un ton profesional și empatic</li>
+                                <li>• Invită clientul să revină pentru o experiență mai bună</li>
+                              </ul>
+                            </div>
+                            
+                            <div className="flex gap-2 mt-3">
                               <Button
                                 size="sm"
                                 onClick={() => handleReply(review.id)}
                                 loading={submitting}
-                                disabled={!replyText.trim()}
+                                disabled={!replyText.trim() || !!replyErrors[review.id] || submitting}
                               >
-                                Trimite
+                                Trimite Răspuns
                               </Button>
                               <Button
                                 size="sm"
@@ -364,7 +482,13 @@ export const ReviewDashboard: React.FC<ReviewDashboardProps> = ({ providerId }) 
                                 onClick={() => {
                                   setReplyingTo(null);
                                   setReplyText('');
+                                  setReplyErrors(prev => {
+                                    const newErrors = { ...prev };
+                                    delete newErrors[review.id];
+                                    return newErrors;
+                                  });
                                 }}
+                                disabled={submitting}
                               >
                                 Anulează
                               </Button>

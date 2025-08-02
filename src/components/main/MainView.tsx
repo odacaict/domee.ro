@@ -15,19 +15,42 @@ import { mapHelpers } from '../../utils/mapHelpers';
 import { plusCodeHelpers } from '../../utils/plusCodeHelpers';
 import { Button } from '../ui/Button';
 
-// *** NOU: Componenta de Notificare ***
-// O componentă simplă pentru a afișa mesaje de eroare în loc de alert().
-const Notification = ({ message, onClose }: { message: string, onClose: () => void }) => {
+// Componenta de Notificare pentru mesaje de eroare și succes
+const Notification = ({ message, type = 'error', onClose }: { message: string, type?: 'error' | 'success' | 'info', onClose: () => void }) => {
   useEffect(() => {
     const timer = setTimeout(onClose, 5000); // Se închide automat după 5 secunde
     return () => clearTimeout(timer);
   }, [onClose]);
 
+  const getNotificationStyles = () => {
+    switch (type) {
+      case 'success':
+        return 'bg-emerald-500 text-white';
+      case 'info':
+        return 'bg-blue-500 text-white';
+      case 'error':
+      default:
+        return 'bg-red-500 text-white';
+    }
+  };
+
+  const getIcon = () => {
+    switch (type) {
+      case 'success':
+        return <span className="text-xl">✓</span>;
+      case 'info':
+        return <span className="text-xl">ℹ</span>;
+      case 'error':
+      default:
+        return <XCircle size={24} />;
+    }
+  };
+
   return (
-    <div className="fixed top-20 right-4 z-50 bg-red-500 text-white p-4 rounded-lg shadow-lg flex items-center gap-4 animate-fade-in-down">
-      <XCircle size={24} />
+    <div className={`fixed top-20 right-4 z-50 ${getNotificationStyles()} p-4 rounded-lg shadow-lg flex items-center gap-4 animate-fade-in-down`}>
+      {getIcon()}
       <span>{message}</span>
-      <button onClick={onClose} className="ml-4">&times;</button>
+      <button onClick={onClose} className="ml-4 hover:opacity-80">&times;</button>
     </div>
   );
 };
@@ -50,8 +73,8 @@ export const MainView: React.FC<MainViewProps> = ({ onProviderSelect, onNavigate
   const carouselRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
 
-  // *** NOU: Stare pentru notificări ***
-  const [notification, setNotification] = useState<string | null>(null);
+  // State pentru notificări cu tipuri
+  const [notification, setNotification] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
 
   // Fetch providers based on filters. Aceasta rămâne sursa principală de date la aplicarea filtrelor.
   const { providers: providersFromHook, loading } = useProviders(filters);
@@ -140,7 +163,7 @@ export const MainView: React.FC<MainViewProps> = ({ onProviderSelect, onNavigate
           setDisplayedProviders(nearbyProviders);
         } catch (error) {
           console.error('Eroare la căutarea după Plus Code:', error);
-          setNotification('Nu s-au putut găsi furnizori în apropierea Plus Code-ului.');
+          setNotification({ message: 'Nu s-au putut găsi furnizori în apropierea Plus Code-ului.', type: 'error' });
         }
       } else {
         // Căutare text normală
@@ -181,13 +204,20 @@ export const MainView: React.FC<MainViewProps> = ({ onProviderSelect, onNavigate
         // Resetăm căutarea text pentru a nu crea confuzie
         setSearchQuery('');
 
+        // Notificare de succes
+        if (nearbyProviders.length > 0) {
+          setNotification({ message: `Am găsit ${nearbyProviders.length} ${nearbyProviders.length === 1 ? 'salon' : 'saloane'} în apropierea ta!`, type: 'success' });
+        } else {
+          setNotification({ message: 'Nu s-au găsit saloane în apropierea ta. Încearcă să mărești raza de căutare.', type: 'info' });
+        }
+
       } catch (error) {
         console.error('Failed to fetch nearby providers:', error);
-        setNotification('Nu am putut prelua saloanele din apropiere. Încercați din nou.');
+        setNotification({ message: 'Nu am putut prelua saloanele din apropiere. Încercați din nou.', type: 'error' });
       }
     } else {
       // Feedback specific pentru erorile de locație
-      setNotification('Nu s-a putut obține locația. Verifică setările browserului și încearcă din nou.');
+      setNotification({ message: 'Nu s-a putut obține locația. Verifică setările browserului și încearcă din nou.', type: 'error' });
     }
   };
 
@@ -244,8 +274,8 @@ export const MainView: React.FC<MainViewProps> = ({ onProviderSelect, onNavigate
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* *** NOU: Randarea notificării *** */}
-      {notification && <Notification message={notification} onClose={() => setNotification(null)} />}
+      {/* Randarea notificării */}
+      {notification && <Notification message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
       
       <Header 
         onMenuClick={() => setMenuOpen(!menuOpen)} 

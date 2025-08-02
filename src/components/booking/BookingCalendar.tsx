@@ -112,9 +112,20 @@ export const BookingCalendar: React.FC<BookingCalendarProps> = ({
     }
   };
 
-  const handlePaymentSuccess = () => {
-    alert('Plata a fost procesată cu succes! Rezervarea dvs. a fost confirmată.');
-    onConfirm(getDisplayDate(), selectedTime!);
+  const handlePaymentSuccess = async () => {
+    if (!newBooking) return;
+    
+    try {
+      // Actualizează statusul rezervării la confirmat și plătit
+      await bookingService.updateBookingStatus(newBooking.id, 'confirmed');
+      await bookingService.updatePaymentStatus(newBooking.id, 'paid');
+      
+      onConfirm(getDisplayDate(), selectedTime!);
+    } catch (error) {
+      console.error('Eroare la actualizarea statusului rezervării:', error);
+      // Continuăm cu confirmarea chiar dacă actualizarea eșuează
+      onConfirm(getDisplayDate(), selectedTime!);
+    }
   };
 
   const isAM = (time: string) => {

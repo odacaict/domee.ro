@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, ToggleLeft, ToggleRight, DollarSign, Clock } from 'lucide-react';
+import { Plus, Edit2, Trash2, ToggleLeft, ToggleRight, DollarSign, Clock, ChevronDown, Tag, Filter } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useServices } from '../../hooks/useServices';
@@ -18,6 +18,20 @@ interface ServiceFormData {
   category?: string;
 }
 
+// Categorii predefinite pentru servicii
+const SERVICE_CATEGORIES = [
+  'Tuns și Aranjat',
+  'Vopsit și Decolorat',
+  'Coafat și Styling',
+  'Tratamente Capilare',
+  'Bărbierit și Îngrijire Barbă',
+  'Manichiură și Pedichiură',
+  'Extensii și Îndesit',
+  'Îngrijire Facială',
+  'Masaj și Relaxare',
+  'Alte Servicii'
+];
+
 export const ServiceManagement: React.FC<ServiceManagementProps> = ({ providerId }) => {
   const { services, loading, createService, updateService, deleteService, toggleServiceStatus } = useServices(providerId);
   const [showForm, setShowForm] = useState(false);
@@ -31,6 +45,8 @@ export const ServiceManagement: React.FC<ServiceManagementProps> = ({ providerId
   });
   const [formErrors, setFormErrors] = useState<Partial<ServiceFormData>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('toate');
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
   const resetForm = () => {
     setFormData({
@@ -124,8 +140,19 @@ export const ServiceManagement: React.FC<ServiceManagementProps> = ({ providerId
     }
   };
 
+  // Obține toate categoriile disponibile din servicii
+  const availableCategories = Array.from(new Set(services.map(s => s.category || 'Fără categorie')));
+
+  // Filtrează serviciile bazat pe categoria selectată
+  const filteredServices = selectedCategoryFilter === 'toate' 
+    ? services 
+    : services.filter(service => {
+        const serviceCategory = service.category || 'Fără categorie';
+        return serviceCategory === selectedCategoryFilter;
+      });
+
   // Group services by category
-  const groupedServices = services.reduce((acc, service) => {
+  const groupedServices = filteredServices.reduce((acc, service) => {
     const category = service.category || 'Fără categorie';
     if (!acc[category]) {
       acc[category] = [];
@@ -150,7 +177,14 @@ export const ServiceManagement: React.FC<ServiceManagementProps> = ({ providerId
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Servicii</h2>
-          <p className="text-slate-600">{services.length} servicii în total</p>
+          <p className="text-slate-600">
+            {filteredServices.length} din {services.length} servicii
+            {selectedCategoryFilter !== 'toate' && (
+              <span className="text-amber-600 ml-1">
+                în categoria "{selectedCategoryFilter}"
+              </span>
+            )}
+          </p>
         </div>
         {!showForm && (
           <Button onClick={() => setShowForm(true)}>
@@ -159,6 +193,71 @@ export const ServiceManagement: React.FC<ServiceManagementProps> = ({ providerId
           </Button>
         )}
       </div>
+
+      {/* Category Filter */}
+      {services.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Filter size={18} className="text-slate-600" />
+              <span className="text-sm font-medium text-slate-700">Filtrează după categorie:</span>
+            </div>
+            <div className="relative">
+              <button
+                onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors"
+              >
+                <Tag size={16} className="text-slate-600" />
+                <span className="text-sm text-slate-700">
+                  {selectedCategoryFilter === 'toate' ? 'Toate Categoriile' : selectedCategoryFilter}
+                </span>
+                <ChevronDown size={16} className={`text-slate-600 transition-transform ${
+                  showCategoryDropdown ? 'rotate-180' : ''
+                }`} />
+              </button>
+              
+              {showCategoryDropdown && (
+                <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+                  <div className="p-2">
+                    <button
+                      onClick={() => {
+                        setSelectedCategoryFilter('toate');
+                        setShowCategoryDropdown(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
+                        selectedCategoryFilter === 'toate'
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      Toate Categoriile ({services.length})
+                    </button>
+                    {availableCategories.map((category) => {
+                      const count = services.filter(s => (s.category || 'Fără categorie') === category).length;
+                      return (
+                        <button
+                          key={category}
+                          onClick={() => {
+                            setSelectedCategoryFilter(category);
+                            setShowCategoryDropdown(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
+                            selectedCategoryFilter === category
+                              ? 'bg-amber-50 text-amber-700'
+                              : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          {category} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Service Form */}
       {showForm && (
@@ -175,12 +274,35 @@ export const ServiceManagement: React.FC<ServiceManagementProps> = ({ providerId
                 error={formErrors.name}
                 required
               />
-              <Input
-                label="Categorie (opțional)"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                placeholder="ex: Tuns, Vopsit, Coafat"
-              />
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Categorie <span className="text-slate-500">(opțional)</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-opacity-20 bg-white appearance-none pr-10"
+                  >
+                    <option value="">Selectează categoria</option>
+                    {SERVICE_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={18} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Sau poți tasta o categorie personalizată
+                </p>
+                <Input
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  placeholder="sau introdu o categorie personalizată"
+                  className="mt-2"
+                />
+              </div>
             </div>
 
             <div>
@@ -242,16 +364,43 @@ export const ServiceManagement: React.FC<ServiceManagementProps> = ({ providerId
             Adaugă primul serviciu
           </Button>
         </div>
+      ) : filteredServices.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+          <p className="text-slate-500 mb-4">
+            Nu există servicii în categoria "{selectedCategoryFilter}"
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => setSelectedCategoryFilter('toate')}
+          >
+            Afișează toate serviciile
+          </Button>
+        </div>
       ) : (
         <div className="space-y-6">
           {Object.entries(groupedServices).map(([category, categoryServices]) => (
-            <div key={category}>
-              <h3 className="font-medium text-slate-700 mb-3">{category}</h3>
-              <div className="space-y-3">
+            <div key={category} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Tag size={18} className="text-slate-600" />
+                    <h3 className="font-semibold text-slate-800">{category}</h3>
+                    <span className="px-2 py-1 bg-slate-200 text-slate-600 rounded-full text-xs font-medium">
+                      {categoryServices.length} {categoryServices.length === 1 ? 'serviciu' : 'servicii'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Preț mediu: {formatPrice(
+                      categoryServices.reduce((sum, s) => sum + s.price, 0) / categoryServices.length
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
                 {categoryServices.map((service) => (
                   <div
                     key={service.id}
-                    className="bg-white rounded-lg border border-slate-200 p-4 hover:shadow-sm transition-shadow"
+                    className="bg-slate-50 rounded-lg border border-slate-200 p-4 hover:shadow-sm hover:bg-white transition-all"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -264,6 +413,11 @@ export const ServiceManagement: React.FC<ServiceManagementProps> = ({ providerId
                           }`}>
                             {service.active ? 'Activ' : 'Inactiv'}
                           </span>
+                          {service.category && (
+                            <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-xs">
+                              {service.category}
+                            </span>
+                          )}
                         </div>
                         {service.description && (
                           <p className="text-sm text-slate-600 mb-2">{service.description}</p>

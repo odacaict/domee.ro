@@ -138,7 +138,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose, onNavigate 
           {!isAuthenticated && !isGuest && (
             <button
               onClick={() => {
-                onNavigate('provider-signup');
+                onNavigate('provider_signup');
                 onClose();
               }}
               className="w-full flex items-center gap-3 p-3 hover:bg-amber-50 rounded-lg transition-colors text-left mt-2 border-2 border-amber-600 text-amber-600"
