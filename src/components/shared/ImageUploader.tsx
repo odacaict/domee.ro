@@ -161,7 +161,14 @@ export const MultiImageUploader: React.FC<MultiImageUploaderProps> = ({
 
     // Check max images limit
     if (images.length + files.length > maxImages) {
-      alert(`Poți încărca maximum ${maxImages} imagini`);
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 z-50 bg-amber-500 text-white p-4 rounded-lg shadow-lg flex items-center gap-2';
+      notification.innerHTML = `<span>⚠️</span><span>Poți încărca maximum ${maxImages} imagini</span>`;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        document.body.removeChild(notification);
+      }, 3000);
       return;
     }
 
@@ -172,7 +179,14 @@ export const MultiImageUploader: React.FC<MultiImageUploaderProps> = ({
     });
 
     if (validFiles.length !== files.length) {
-      alert('Unele fișiere nu sunt valide și au fost ignorate');
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 z-50 bg-amber-500 text-white p-4 rounded-lg shadow-lg flex items-center gap-2';
+      notification.innerHTML = '<span>⚠️</span><span>Unele fișiere nu sunt valide și au fost ignorate</span>';
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        document.body.removeChild(notification);
+      }, 3000);
     }
 
     if (validFiles.length === 0) return;
@@ -181,8 +195,25 @@ export const MultiImageUploader: React.FC<MultiImageUploaderProps> = ({
       setUploading(true);
       const urls = await uploadService.uploadMultipleImages(validFiles, bucket, path);
       onImagesChange([...images, ...urls]);
+      
+      // Notificare de succes
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 z-50 bg-emerald-500 text-white p-4 rounded-lg shadow-lg flex items-center gap-2';
+      notification.innerHTML = `<span>✓</span><span>${urls.length} imagini încărcate cu succes!</span>`;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        document.body.removeChild(notification);
+      }, 3000);
     } catch (err) {
-      alert('Eroare la încărcarea imaginilor');
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 z-50 bg-red-500 text-white p-4 rounded-lg shadow-lg flex items-center gap-2';
+      notification.innerHTML = '<span>✕</span><span>Eroare la încărcarea imaginilor</span>';
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        document.body.removeChild(notification);
+      }, 3000);
     } finally {
       setUploading(false);
     }
