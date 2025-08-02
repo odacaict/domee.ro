@@ -43,7 +43,6 @@ export const providerService = {
       
       return view.getFloat64(0, true); // little-endian
     } catch (error) {
-      console.warn('Eroare la conversia hex la float:', error);
       return 0;
     }
   },
@@ -64,7 +63,7 @@ export const providerService = {
             transformed.coordinates = { lat, lng };
           }
         } catch (error) {
-          console.warn("Eroare la procesarea coordonatelor JSON:", error);
+          // Eroare la procesarea coordonatelor JSON
         }
       }
       // Format 2: Coordonate din PostGIS "POINT(lng lat)" 
@@ -78,7 +77,7 @@ export const providerService = {
             }
           }
         } catch (error) {
-          console.warn("Eroare la procesarea coordonatelor PostGIS:", error);
+          // Eroare la procesarea coordonatelor PostGIS
         }
       }
       
@@ -88,9 +87,6 @@ export const providerService = {
   },
 
   async getProviders(filters?: any): Promise<Provider[]> {
-    console.log("=== DEBUG: getProviders ===");
-    console.log("Filtre:", filters);
-    
     // Query simplu pentru toți providerii
     let query = supabase.from('providers').select('*');
     
@@ -125,35 +121,25 @@ export const providerService = {
       });
       
       if (error) {
-        console.error("Eroare la căutarea după distanță:", error);
         throw new Error(`Eroare la căutarea după distanță: ${error.message}`);
       }
       
-      console.log("Rezultate după distanță:", data);
       return data.map((item: any) => this.transformCoordinates(item)) as Provider[];
     }
     
     const { data, error } = await query;
     
     if (error) {
-      console.error("Eroare la încărcarea providerilor:", error);
       throw new Error(`Nu am putut încărca providerii: ${error.message}`);
     }
     
-    console.log("Date brute din Supabase:", data);
-    
     // Transformăm coordonatele pentru fiecare provider
     const transformedData = data.map((item: any) => this.transformCoordinates(item));
-    
-    console.log("Date transformate:", transformedData);
     
     return transformedData as Provider[];
   },
 
   async getProviderById(id: string): Promise<Provider | null> {
-    console.log("=== DEBUG: getProviderById ===");
-    console.log("ID:", id);
-    
     const { data, error } = await supabase
       .from('providers')
       .select('*')
@@ -161,18 +147,13 @@ export const providerService = {
       .single();
     
     if (error) {
-      console.error("Eroare la încărcarea provider:", error);
       return null;
     }
     
-    console.log("Provider găsit:", data);
     return this.transformCoordinates(data) as Provider;
   },
 
   async getProviderByUserId(userId: string): Promise<Provider | null> {
-    console.log("=== DEBUG: getProviderByUserId ===");
-    console.log("User ID:", userId);
-    
     const retryCount = 3;
     for (let i = 0; i < retryCount; i++) {
       try {
@@ -184,18 +165,14 @@ export const providerService = {
         
         if (error) {
           if (i === retryCount - 1) {
-            console.error("Eroare finală la încărcarea provider:", error);
             return null;
           }
-          console.warn(`Încercarea ${i + 1} eșuată, reîncerc...`);
           await new Promise(resolve => setTimeout(resolve, 1000));
           continue;
         }
         
-        console.log("Provider găsit pentru user:", data);
         return this.transformCoordinates(data) as Provider;
       } catch (error) {
-        console.error("Excepție la încărcarea provider:", error);
         if (i === retryCount - 1) return null;
       }
     }
@@ -204,17 +181,12 @@ export const providerService = {
   },
 
   async createProvider(data: Partial<Provider>): Promise<Provider> {
-    console.log("=== DEBUG: Începe crearea provider ===");
-    console.log("Datele primite:", JSON.stringify(data, null, 2));
-    
     const validationErrors = validateProviderData(data);
     if (validationErrors.length > 0) {
-      console.error("Erori de validare:", validationErrors);
       throw new Error(`Validare eșuată: ${validationErrors.join(", ")}`);
     }
 
     // Verificăm dacă există deja un provider cu acest user_id
-    console.log("Verific dacă există provider pentru user_id:", data.user_id);
     const { data: existing, error: checkError } = await supabase
       .from('providers')
       .select('id')
@@ -222,7 +194,6 @@ export const providerService = {
       .single();
 
     if (existing) {
-      console.log("Provider existent găsit, actualizez în loc să creez");
       return this.updateProvider(existing.id, data);
     }
 
@@ -266,29 +237,21 @@ export const providerService = {
           if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
             // Format PostGIS: POINT(lng lat)
             insertData.location = `POINT(${lng} ${lat})`;
-            console.log("Coordonate procesate cu succes:", { lat, lng });
-          } else {
-            console.warn("Coordonate invalide:", data.coordinates);
           }
-        } else {
-          console.warn("Format coordonate invalid:", data.coordinates);
         }
       } catch (error) {
-        console.warn("Eroare la procesarea coordonatelor:", error);
+        // Eroare la procesarea coordonatelor
       }
     } else if (data.coordinates && typeof data.coordinates === 'object') {
       try {
         const { lat, lng } = data.coordinates;
         if (typeof lat === 'number' && typeof lng === 'number') {
           insertData.location = `POINT(${lng} ${lat})`;
-          console.log("Coordonate procesate cu succes:", { lat, lng });
         }
       } catch (error) {
-        console.warn("Eroare la procesarea coordonatelor:", error);
+        // Eroare la procesarea coordonatelor
       }
     }
-
-    console.log("Datele pentru inserare:", insertData);
 
     const { data: provider, error } = await supabase
       .from('providers')
@@ -297,18 +260,13 @@ export const providerService = {
       .single();
 
     if (error) {
-      console.error("Eroare la crearea provider în Supabase:", error);
       throw new Error(`Nu am putut crea profilul de provider: ${error.message}`);
     }
 
-    console.log("Provider creat cu succes:", provider);
     return this.transformCoordinates(provider) as Provider;
   },
 
   async updateProvider(id: string, updates: Partial<Provider>): Promise<Provider> {
-    console.log("=== DEBUG: updateProvider ===");
-    console.log("ID:", id, "Updates:", updates);
-    
     // Procesăm coordonatele dacă există
     let processedUpdates = { ...updates };
     
@@ -325,7 +283,7 @@ export const providerService = {
           }
         }
       } catch (error) {
-        console.warn("Eroare la procesarea coordonatelor în update:", error);
+        // Eroare la procesarea coordonatelor în update
       }
     }
     
@@ -337,20 +295,14 @@ export const providerService = {
       .single();
     
     if (error) {
-      console.error("Eroare la update provider:", error);
       handleApiError(error);
     }
-    
-    console.log("Rezultat update:", result);
     
     // Transformăm coordonatele la returnare
     return this.transformCoordinates(result) as Provider;
   },
 
   async searchProviders(query: string, userLocation?: { lat: number; lng: number }): Promise<Provider[]> {
-    console.log("=== DEBUG: searchProviders ===");
-    console.log("Query:", query, "UserLocation:", userLocation);
-    
     const { data, error } = await supabase
       .rpc('search_providers', {
         search_query: query,
@@ -359,16 +311,11 @@ export const providerService = {
       });
 
     if (error) {
-      console.error("Eroare la searchProviders:", error);
       handleApiError(error);
     }
     
-    console.log("Rezultate brute din search_providers:", data);
-    
     // Transformăm coordonatele pentru fiecare provider
     const transformedData = data ? data.map((item: any) => this.transformCoordinates(item)) : [];
-    
-    console.log("Rezultate transformate din search:", transformedData);
     
     return transformedData as Provider[];
   },
