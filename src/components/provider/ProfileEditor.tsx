@@ -7,6 +7,7 @@ import { Provider, DaySchedule, BankAccount } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { ROMANIA_CITIES, FACILITIES_OPTIONS, LANGUAGES } from '../../utils/constants';
 import { plusCodeHelpers } from '../../utils/plusCodeHelpers';
+import { validateCoordinates } from '../../utils/validation';
 
 interface ProfileEditorProps {
   providerId: string;
@@ -53,6 +54,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
     bank_accounts: [], crypto_wallets: [],
   });
   const [logoUrl, setLogoUrl] = useState<string>('');
+  const [coordinatesError, setCoordinatesError] = useState<string>('');
   
   const [newBankAccount, setNewBankAccount] = useState<BankAccount>({ bank_name: '', iban: '', swift: '' });
   const [newCryptoWallet, setNewCryptoWallet] = useState('');
@@ -217,6 +219,21 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
     setFormData(prev => ({ ...prev, team_members: prev.team_members?.filter((_, i) => i !== index) }));
   };
 
+  const handleCoordinatesChange = (value: string) => {
+    setFormData({ ...formData, coordinates: value });
+    
+    // Validează coordonatele dacă câmpul nu este gol
+    if (value.trim()) {
+      if (!validateCoordinates(value)) {
+        setCoordinatesError('Format invalid. Folosește formatul: latitudine, longitudine (ex: 44.4268, 26.1025)');
+      } else {
+        setCoordinatesError('');
+      }
+    } else {
+      setCoordinatesError('');
+    }
+  };
+
   if (loading) {
     return <div className="animate-pulse space-y-6"><div className="h-32 bg-slate-200 rounded-xl"></div><div className="h-32 bg-slate-200 rounded-xl"></div></div>;
   }
@@ -300,6 +317,28 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
               <option value="">Selectează orașul</option>
               {ROMANIA_CITIES.map(city => (<option key={city} value={city}>{city}</option>))}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Coordonate GPS (opțional)</label>
+            <Input 
+              value={formData.coordinates || ''} 
+              onChange={(e) => handleCoordinatesChange(e.target.value)} 
+              placeholder="ex: 44.4268, 26.1025" 
+              className="w-full"
+              error={coordinatesError}
+            />
+            <div className="mt-2 space-y-2 text-xs text-slate-600">
+              <p className="font-medium">💡 Cum să obții coordonatele:</p>
+              <ul className="space-y-1 ml-4">
+                <li>• Mergi pe <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google Maps</a></li>
+                <li>• Caută adresa salonului tău</li>
+                <li>• Click dreapta pe locația exactă și alege "Ce e aici?"</li>
+                <li>• Copiază coordonatele afișate (ex: 44.4268, 26.1025)</li>
+              </ul>
+              <p className="text-amber-600 font-medium">
+                ⚠️ Formatul corect: latitudine, longitudine (separate prin virgulă și spațiu)
+              </p>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Plus Code (opțional)</label>
