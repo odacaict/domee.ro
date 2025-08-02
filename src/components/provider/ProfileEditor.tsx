@@ -395,7 +395,119 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2"><Clock size={20} />Program de Lucru</h3>
-         {/* ... implementation for working hours editor ... */}
+        
+        <div className="space-y-4">
+          {Object.entries(formData.working_hours).map(([day, schedule]) => {
+            const dayLabels: Record<string, string> = {
+              monday: 'Luni',
+              tuesday: 'Marți', 
+              wednesday: 'Miercuri',
+              thursday: 'Joi',
+              friday: 'Vineri',
+              saturday: 'Sâmbătă',
+              sunday: 'Duminică'
+            };
+
+            return (
+              <div key={day} className="border border-slate-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-slate-800">{dayLabels[day]}</h4>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!schedule.closed}
+                      onChange={(e) => handleWorkingHoursChange(day, 'closed', !e.target.checked)}
+                      className="rounded border-slate-300"
+                    />
+                    <span className="text-sm text-slate-600">Deschis</span>
+                  </label>
+                </div>
+
+                {!schedule.closed && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">Ora deschidere</label>
+                        <input
+                          type="time"
+                          value={schedule.open || '09:00'}
+                          onChange={(e) => handleWorkingHoursChange(day, 'open', e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">Ora închidere</label>
+                        <input
+                          type="time"
+                          value={schedule.close || '18:00'}
+                          onChange={(e) => handleWorkingHoursChange(day, 'close', e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Pauze */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-medium text-slate-700">Pauze</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newBreaks = [...(schedule.breaks || []), { start: '12:00', end: '13:00' }];
+                            handleWorkingHoursChange(day, 'breaks', newBreaks);
+                          }}
+                          className="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded text-slate-600"
+                        >
+                          + Adaugă pauză
+                        </button>
+                      </div>
+                      
+                      {schedule.breaks && schedule.breaks.length > 0 && (
+                        <div className="space-y-2">
+                          {schedule.breaks.map((breakTime, index) => (
+                            <div key={index} className="flex items-center gap-2 bg-slate-50 p-2 rounded">
+                              <input
+                                type="time"
+                                value={breakTime.start}
+                                onChange={(e) => {
+                                  const newBreaks = [...schedule.breaks];
+                                  newBreaks[index] = { ...newBreaks[index], start: e.target.value };
+                                  handleWorkingHoursChange(day, 'breaks', newBreaks);
+                                }}
+                                className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm"
+                              />
+                              <span className="text-slate-500 text-sm">-</span>
+                              <input
+                                type="time"
+                                value={breakTime.end}
+                                onChange={(e) => {
+                                  const newBreaks = [...schedule.breaks];
+                                  newBreaks[index] = { ...newBreaks[index], end: e.target.value };
+                                  handleWorkingHoursChange(day, 'breaks', newBreaks);
+                                }}
+                                className="flex-1 px-2 py-1 border border-slate-300 rounded text-sm"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newBreaks = schedule.breaks.filter((_, i) => i !== index);
+                                  handleWorkingHoursChange(day, 'breaks', newBreaks);
+                                }}
+                                className="p-1 text-red-600 hover:bg-red-100 rounded"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
