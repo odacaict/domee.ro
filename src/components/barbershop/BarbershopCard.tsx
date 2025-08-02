@@ -3,17 +3,20 @@ import { MapPin, Star as StarIcon, Clock, Verified, Map, Shield, Bitcoin, Credit
 import { Button } from '../ui/Button';
 import { Provider } from '../../types';
 import { formatPrice, formatDistance } from '../../lib/utils';
+import { mapHelpers } from '../../utils/mapHelpers';
 
 interface BarbershopCardProps {
   provider: Provider;
   onBook: (provider: Provider) => void;
   onViewMap: (provider: Provider) => void;
+  userLocation?: { lat: number; lng: number } | null;
 }
 
 export const BarbershopCard: React.FC<BarbershopCardProps> = ({
   provider,
   onBook,
   onViewMap,
+  userLocation,
 }) => {
   const isOpenNow = () => {
     const now = new Date();
@@ -40,6 +43,41 @@ export const BarbershopCard: React.FC<BarbershopCardProps> = ({
   const getMinPrice = () => {
     if (!provider.services || provider.services.length === 0) return 0;
     return Math.min(...provider.services.map(s => s.price));
+  };
+
+  // Funcție pentru calcularea distanței de la utilizator la salon
+  const calculateDistanceToUser = () => {
+    if (!userLocation || !provider.coordinates) return null;
+    
+    // Verifică dacă coordonatele provider-ului sunt valide
+    let providerCoords = null;
+    
+    // Format 1: coordinates obiect direct
+    if (provider.coordinates && typeof provider.coordinates === 'object' && 
+        typeof provider.coordinates.lat === 'number' && typeof provider.coordinates.lng === 'number') {
+      providerCoords = provider.coordinates;
+    }
+    // Format 2: location GEOGRAPHY din baza de date
+    else if (provider.location) {
+      try {
+        if (typeof provider.location === 'string') {
+          const parsed = JSON.parse(provider.location);
+          if (parsed.coordinates && Array.isArray(parsed.coordinates) && parsed.coordinates.length === 2) {
+            providerCoords = { lat: parsed.coordinates[1], lng: parsed.coordinates[0] };
+          }
+        } else if (typeof provider.location === 'object' && provider.location.coordinates) {
+          if (Array.isArray(provider.location.coordinates) && provider.location.coordinates.length === 2) {
+            providerCoords = { lat: provider.location.coordinates[1], lng: provider.location.coordinates[0] };
+          }
+        }
+      } catch (error) {
+        console.warn('Eroare la parsarea location pentru distanță:', error);
+      }
+    }
+    
+    if (!providerCoords) return null;
+    
+    return mapHelpers.calculateDistance(userLocation, providerCoords);
   };
 
   // Funcție pentru a obține cea mai bună imagine disponibilă
@@ -125,7 +163,7 @@ export const BarbershopCard: React.FC<BarbershopCardProps> = ({
         </div>
 
         {/* Rating and Reviews */}
-        <div className="flex items-center gap-1 mb-3">
+        <div className="flex items-center gap-1 mb-2">
           {[1, 2, 3, 4, 5].map((star) => (
             <Heart
               key={star}
@@ -145,25 +183,30 @@ export const BarbershopCard: React.FC<BarbershopCardProps> = ({
           </span>
         </div>
 
-        {/* Info Row */}
-        <div className="flex items-center gap-4 mb-3 text-sm">
-          {/* Distanța - doar dacă există */}
-          {provider.distance !== undefined && provider.distance !== null && (
-            <div className="flex items-center gap-1 text-slate-500">
-              <MapPin size={14} />
-              <span>{formatDistance(provider.distance)}</span>
-            </div>
-          )}
+        {/* Distance */}
+        {(() => {
+          const calculatedDistance = calculateDistanceToUser();
+          const displayDistance = calculatedDistance !== null ? calculatedDistance : provider.distance;
+          
+          if (displayDistance !== undefined && displayDistance !== null) {
+            return (
+              <div className="flex items-center gap-1 mb-3 text-sm text-slate-500">
+                <MapPin size={14} />
+                <span>{formatDistance(displayDistance)}</span>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
-          {/* Payment Methods */}
-          <div className="flex items-center gap-1">
-            {provider.payment_methods?.fiat && (
-              <CreditCard size={14} className="text-slate-400" title="Acceptă card" />
-            )}
-            {provider.payment_methods?.crypto && (
-              <Bitcoin size={14} className="text-amber-600" title="Acceptă crypto" />
-            )}
-          </div>
+        {/* Payment Methods */}
+        <div className="flex items-center gap-1 mb-3">
+          {provider.payment_methods?.fiat && (
+            <CreditCard size={14} className="text-slate-400" title="Acceptă card" />
+          )}
+          {provider.payment_methods?.crypto && (
+            <Bitcoin size={14} className="text-amber-600" title="Acceptă crypto" />
+          )}
         </div>
 
         {/* Price */}
