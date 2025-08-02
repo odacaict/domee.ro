@@ -70,27 +70,43 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
       
       console.log("Raw provider data:", data); // Debug
       
-      // NOU: Procesăm coordonatele corect
+      // Procesează coordonatele din diverse formate
       let coordinatesString = '';
       if (data.location) {
         try {
-          // Coordonatele din Supabase sunt în format PostGIS
-          // Trebuie să le parsăm corect
           if (typeof data.location === 'string' && data.location.startsWith('POINT(')) {
-            // Format: POINT(lng lat)
+            // Format PostGIS: POINT(lng lat)
             const match = data.location.match(/POINT\(([^)]+)\)/);
             if (match) {
               const [lng, lat] = match[1].split(' ').map(Number);
+              if (!isNaN(lat) && !isNaN(lng)) {
+                coordinatesString = `${lat}, ${lng}`;
+              }
+            }
+          } else if (typeof data.location === 'object' && data.location.coordinates) {
+            // Format GeoJSON: { coordinates: [lng, lat] }
+            const [lng, lat] = data.location.coordinates;
+            if (!isNaN(lat) && !isNaN(lng)) {
               coordinatesString = `${lat}, ${lng}`;
             }
-          } else if (data.location.coordinates) {
-            // Format JSON: { coordinates: [lng, lat] }
-            const [lng, lat] = data.location.coordinates;
-            coordinatesString = `${lat}, ${lng}`;
           }
         } catch (error) {
           console.warn("Eroare la procesarea coordonatelor:", error);
         }
+      }
+      
+      // Procesează payment_methods cu verificări defensive
+      let bankAccounts = [];
+      let cryptoWallets = [];
+      if (data.payment_methods && typeof data.payment_methods === 'object') {
+        bankAccounts = Array.isArray(data.payment_methods.bank_accounts) ? data.payment_methods.bank_accounts : [];
+        cryptoWallets = Array.isArray(data.payment_methods.crypto_wallets) ? data.payment_methods.crypto_wallets : [];
+      }
+      
+      // Procesează working_hours cu fallback la default
+      let workingHours = getDefaultWorkingHours();
+      if (data.working_hours && typeof data.working_hours === 'object') {
+        workingHours = { ...getDefaultWorkingHours(), ...data.working_hours };
       }
       
       setFormData({
@@ -103,24 +119,29 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ providerId }) => {
         phone: data.phone || '',
         email: data.email || '',
         website: data.website || '',
-        working_hours: data.working_hours || getDefaultWorkingHours(),
-        facilities: data.facilities || [],
-        languages: data.languages || ['ro'],
-        social_media: data.social_media || {},
-        policies: data.policies || {},
-        team_members: data.team_members || [],
+        working_hours: workingHours,
+        facilities: Array.isArray(data.facilities) ? data.facilities : [],
+        languages: Array.isArray(data.languages) ? data.languages : ['ro'],
+        social_media: data.social_media && typeof data.social_media === 'object' ? data.social_media : {},
+        policies: data.policies && typeof data.policies === 'object' ? data.policies : {},
+        team_members: Array.isArray(data.team_members) ? data.team_members : [],
         company_name: data.company_name || '',
         fiscal_code: data.fiscal_code || '',
         company_type: data.company_type || '',
-        bank_accounts: data.payment_methods?.bank_accounts || [],
-        crypto_wallets: data.payment_methods?.crypto_wallets || [],
+        bank_accounts: bankAccounts,
+        crypto_wallets: cryptoWallets,
       });
+      
+      // Setează logo_url cu verificare
       setLogoUrl(data.logo_url || '');
       
       console.log("Processed form data:", {
         salon_name: data.salon_name,
         coordinates: coordinatesString,
-        logo_url: data.logo_url
+        bank_accounts: bankAccounts,
+        crypto_wallets: cryptoWallets,
+        logo_url: data.logo_url,
+        working_hours: workingHours
       });
     } catch (error) {
       console.error('Failed to fetch provider data:', error);
